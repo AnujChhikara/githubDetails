@@ -4,34 +4,23 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { CalendarDateRangePicker } from "./date-range-picker";
-import { MainNav } from "./main-nav";
 import { Overview } from "./overview";
-import { RecentSales } from "./recent-sales";
-import { Search } from "./search";
-import TeamSwitcher from "./team-switcher";
 import { UserNav } from "./user-nav";
+import { GitHubIssueCard } from "./GithubCard";
 
 interface Contribution {
-  type: string;
-  repo: string;
-  title: string;
-  url: string;
-  createdAt: string;
+  total_count: number;
+  incomplete_results: boolean;
+  items: unknown[];
 }
 
 export default function OrgContributionsSection() {
   const [username, setUsername] = useState("");
   const [orgName, setOrgName] = useState("");
-  const [contributions, setContributions] = useState<Contribution[]>([]);
+  const [contributions, setContributions] = useState<Contribution>();
+  const [issueContributions, setIssueContributions] = useState<Contribution>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -39,15 +28,21 @@ export default function OrgContributionsSection() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setContributions([]);
+    setContributions(undefined);
 
     try {
       const response = await fetch(
         `https://api.github.com/search/issues?q=author:${username}+org:${orgName}+type:pr`
       );
+      const issueResponse = await fetch(
+        `https://api.github.com/search/issues?q=author:${username}+org:${orgName}+type:issue`
+      );
+      if (!response.ok || !issueResponse.ok)
+        throw new Error("Failed to fetch contributions");
+      const data2 = await issueResponse.json();
+      setIssueContributions(data2);
       if (!response.ok) throw new Error("Failed to fetch contributions");
       const data = await response.json();
-      console.log(data);
       setContributions(data);
     } catch (err) {
       console.log(err);
@@ -65,27 +60,27 @@ export default function OrgContributionsSection() {
         <CardTitle>Organization Contributions</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={fetchContributions} className="space-y-4">
-          <div className="flex gap-2">
+        <form onSubmit={fetchContributions} className='space-y-4'>
+          <div className='flex gap-2'>
             <Input
-              type="text"
+              type='text'
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter GitHub username"
+              placeholder='Enter GitHub username'
               required
             />
             <Input
-              type="text"
+              type='text'
               value={orgName}
               onChange={(e) => setOrgName(e.target.value)}
-              placeholder="Enter organization name"
+              placeholder='Enter organization name'
               required
             />
           </div>
-          <Button type="submit" disabled={loading} className="w-full">
+          <Button type='submit' disabled={loading} className='w-full'>
             {loading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                 Fetching Contributions...
               </>
             ) : (
@@ -93,174 +88,101 @@ export default function OrgContributionsSection() {
             )}
           </Button>
         </form>
-        <DashboardPage />
+        {contributions &&
+          contributions.total_count > 0 &&
+          issueContributions &&
+          issueContributions?.total_count > 0 && (
+            <DashboardPage
+              data={contributions.items}
+              data2={issueContributions.items}
+            />
+          )}
 
-        {error && <p className="text-red-500 mt-4">{error}</p>}
+        {error && <p className='text-red-500 mt-4'>{error}</p>}
 
         {contributions && <div> </div>}
       </CardContent>
     </Card>
   );
 }
+interface DashboardPageProps {
+  data: Array<{
+    id: number;
+    title: string;
+    state: string;
+    html_url: string;
+    user: {
+      login: string;
+      avatar_url: string;
+      html_url: string;
+    };
+    assignee?: {
+      login: string;
+      avatar_url: string;
+    };
+    created_at: string;
+    updated_at: string;
+    closed_at?: string;
+  }>;
+}
 
-export function DashboardPage() {
+const DashboardPage: React.FC<DashboardPageProps> = ({ data, data2 }) => {
   return (
     <>
-      <div className="hidden flex-col md:flex">
-        <div className="border-b">
-          <div className="flex h-16 items-center px-4">
-            <TeamSwitcher />
-            <MainNav className="mx-6" />
-            <div className="ml-auto flex items-center space-x-4">
-              <Search />
-              <UserNav />
+      <div className='hidden flex-col md:flex'>
+        <div className='border-b'>
+          <div className='flex h-16 items-center px-4'>
+            <div className='ml-auto flex items-center space-x-4'>
+              <UserNav imageUrl={data[0]?.user.avatar_url} />
+              <span>{data[0]?.user.login}</span>
             </div>
           </div>
         </div>
-        <div className="flex-1 space-y-4 p-8 pt-6">
-          <div className="flex items-center justify-between space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-            <div className="flex items-center space-x-2">
-              <CalendarDateRangePicker />
-              <Button>Download</Button>
-            </div>
+        <div className='flex-1 space-y-4 p-8 pt-6'>
+          <div className='flex items-center justify-between space-y-2'>
+            <h2 className='text-3xl font-bold tracking-tight'>Dashboard</h2>
           </div>
-          <Tabs defaultValue="overview" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="analytics" disabled>
-                Analytics
-              </TabsTrigger>
-              <TabsTrigger value="reports" disabled>
-                Reports
-              </TabsTrigger>
-              <TabsTrigger value="notifications" disabled>
-                Notifications
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Tabs defaultValue='overview' className='space-y-4'>
+            <TabsContent value='overview' className='space-y-4'>
+              <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Total Revenue
+                  <CardHeader
+                    className='flex flex-row items-center
+                   justify-between space-y-0 pb-2'
+                  >
+                    <CardTitle className='text-sm font-medium'>
+                      Total Contributions
                     </CardTitle>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      className="h-4 w-4 text-muted-foreground"
-                    >
-                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                    </svg>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">$45,231.89</div>
-                    <p className="text-xs text-muted-foreground">
-                      +20.1% from last month
-                    </p>
+                    <div className='text-2xl font-bold'>{data.length}</div>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Subscriptions
+                  <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                    <CardTitle className='text-sm font-medium'>
+                      Issues
                     </CardTitle>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      className="h-4 w-4 text-muted-foreground"
-                    >
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                    </svg>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">+2350</div>
-                    <p className="text-xs text-muted-foreground">
-                      +180.1% from last month
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Sales</CardTitle>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      className="h-4 w-4 text-muted-foreground"
-                    >
-                      <rect width="20" height="14" x="2" y="5" rx="2" />
-                      <path d="M2 10h20" />
-                    </svg>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">+12,234</div>
-                    <p className="text-xs text-muted-foreground">
-                      +19% from last month
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Active Now
-                    </CardTitle>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      className="h-4 w-4 text-muted-foreground"
-                    >
-                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                    </svg>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">+573</div>
-                    <p className="text-xs text-muted-foreground">
-                      +201 since last hour
-                    </p>
+                    <div className='text-2xl font-bold'>{data2.length}</div>
                   </CardContent>
                 </Card>
               </div>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="col-span-4">
-                  <CardHeader>
-                    <CardTitle>Overview</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pl-2">
-                    <Overview />
-                  </CardContent>
+              <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-7'>
+                <Card className='col-span-4'>
+                  {data2.map((item, index) => (
+                    <div key={index}>
+                      <GitHubIssueCard issue={item} />
+                    </div>
+                  ))}
                 </Card>
-                <Card className="col-span-3">
-                  <CardHeader>
-                    <CardTitle>Recent Sales</CardTitle>
-                    <CardDescription>
-                      You made 265 sales this month.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <RecentSales />
-                  </CardContent>
+                <Card className='col-span-3'>
+                  {data.map((item, index) => (
+                    <div key={index}>
+                      <GitHubIssueCard issue={item} />
+                    </div>
+                  ))}
                 </Card>
               </div>
             </TabsContent>
@@ -269,4 +191,4 @@ export function DashboardPage() {
       </div>
     </>
   );
-}
+};
